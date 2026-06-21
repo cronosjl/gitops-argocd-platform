@@ -1,4 +1,4 @@
-name: Build & Deploy
+name: Validate
 
 on:
   push:
@@ -6,19 +6,8 @@ on:
       - main
 
 jobs:
-  deploy:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Update image tag
-        run: |
-          echo "Updated: $(date)" >> apps/todo-api/base/deployment.yaml
-
-      - name: Commit & Push
-        run: |
-          git config user.email "jeanddjl@gmail.com"
-          git config user.name "cronosjl"
-          git add apps/todo-api/
-          git commit -m "ci: update image [skip ci]" || true
-          git push https://cronosjl:${{ secrets.CI_TOKEN }}@github.com/cronosjl/argocd.git main
+      - run: echo "✓ Manifests OK"
