@@ -1,0 +1,29 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/todo-api/base/**'
+      - '.github/workflows/deploy.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update image tag in overlays
+        run: |
+          # Simule une mise à jour de tag (en vrai, tu builderais une image Docker)
+          # Pour ce TP, on simule juste une modification
+          echo "Image updated at $(date)" >> apps/todo-api/base/deployment.yaml
+          
+      - name: Commit & Push
+        run: |
+          git config user.email "ci@example.com"
+          git config user.name "CI Bot"
+          git add apps/todo-api/
+          git commit -m "ci: auto-update image tag [skip ci]" || true
+          git push origin main
