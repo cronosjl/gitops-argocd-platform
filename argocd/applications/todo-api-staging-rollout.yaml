@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: todo-api-staging-rollout
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/cronosjl/argocd.git
+    targetRevision: HEAD
+    path: apps/todo-api/overlays/staging-rollout
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: todo-api-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
