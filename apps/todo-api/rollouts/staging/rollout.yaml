@@ -29,6 +29,7 @@ spec:
             memory: "256Mi"
   strategy:
     blueGreen:
-      activeSlot: blue
+      activeService: todo-api-active
+      previewService: todo-api-preview
       autoPromotionEnabled: false
       scaleDownDelaySeconds: 30

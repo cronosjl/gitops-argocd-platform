@@ -13,3 +13,35 @@ spec:
     port: 80
     targetPort: 80
     protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: todo-api-active
+  labels:
+    app: todo-api
+spec:
+  type: ClusterIP
+  selector:
+    app: todo-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: todo-api-preview
+  labels:
+    app: todo-api
+spec:
+  type: ClusterIP
+  selector:
+    app: todo-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
