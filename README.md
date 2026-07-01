@@ -64,56 +64,38 @@ Toute modification de l'infrastructure passe par un commit.
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                      GitHub                              │
-│  repo: cronosjl/gitops-argocd-platform (branch: main)   │
-└────────────────────────┬─────────────────────────────────┘
-                         │ polling / webhook
-                         ▼
-┌──────────────────────────────────────────────────────────┐
-│               ArgoCD (namespace: argocd)                  │
-│                                                          │
-│  ┌─────────────────┐  ┌───────────────────────────────┐  │
-│  │  todo-api-dev   │  │  todo-api-staging             │  │
-│  │  overlays/dev   │  │  overlays/staging             │  │
-│  └────────┬────────┘  └──────────────┬────────────────┘  │
-│           │                          │                    │
-│  ┌────────┴──────────────────────────┴────────────────┐  │
-│  │  todo-api-rollout        │  infrastructure         │  │
-│  │  rollouts/staging (B/G)  │  kubernetes/            │  │
-│  └──────────────────────────┴────────────────────────-┘  │
-└──────────────────────────────────────────────────────────┘
-          │                            │
-          ▼                            ▼
-┌─────────────────┐        ┌───────────────────────────┐
-│ todo-api-dev     │        │ todo-api-staging           │
-│                 │        │                            │
-│  Deployment     │        │  Deployment (3 replicas)   │
-│  1 replica      │        │  Rollout blue/green        │
-│                 │        │  svc: active + preview     │
-└─────────────────┘        └───────────────────────────┘
+```mermaid
+graph TD
+    GH["GitHub\ncronosjl/gitops-argocd-platform\nbranch: main"]
+
+    GH -->|polling / webhook| ARGO["ArgoCD\nnamespace: argocd"]
+
+    ARGO --> APP1["todo-api-dev\napps/todo-api/overlays/dev"]
+    ARGO --> APP2["todo-api-staging\napps/todo-api/overlays/staging"]
+    ARGO --> APP3["todo-api-rollout\napps/todo-api/rollouts/staging"]
+    ARGO --> APP4["infrastructure\ninfrastructure/kubernetes"]
+
+    APP1 --> NS1["namespace: todo-api-dev\nDeployment — 1 replica"]
+    APP2 --> NS2["namespace: todo-api-staging\nDeployment — 3 replicas"]
+    APP3 --> NS2
+    APP4 --> INFRA["Namespaces · RBAC\nNetworkPolicy · SealedSecrets"]
+
+    NS2 --> SVC1["svc: todo-api-active\n100% trafic"]
+    NS2 --> SVC2["svc: todo-api-preview\n0% trafic — validation"]
 ```
 
 ### Flux CI → GitOps
 
-```
-git push (code applicatif)
-        │
-        ▼
-GitHub Actions
-  ├─ [TODO] build image Docker (tag = SHA commit)
-  ├─ [TODO] push → registry
-  └─ [TODO] commit nouveau tag dans ce repo GitOps
-        │
-        ▼
-ArgoCD détecte le changement (polling toutes les 3 min)
-        │
-        ▼
-kustomize build → apply diff sur le cluster
-        │
-        ▼
-Argo Rollouts gère la progression (blue/green)
+```mermaid
+flowchart TD
+    A["git push\n(code applicatif)"] --> B["GitHub Actions"]
+    B --> C["TODO: build image Docker\ntag = SHA commit"]
+    B --> D["TODO: push → registry\ndocker.io/shatri/todo-api-node"]
+    B --> E["TODO: commit nouveau tag\ndans ce repo GitOps"]
+    E --> F["ArgoCD détecte le changement\npolling toutes les 3 min"]
+    F --> G["kustomize build\napply diff sur le cluster"]
+    G --> H["Argo Rollouts\ngère la progression blue/green"]
+    H --> I["Cluster converge\nvers l'état désiré"]
 ```
 
 ---
@@ -375,19 +357,16 @@ jobs:
 
 Configuré dans `apps/todo-api/rollouts/staging/`.
 
-```
-Nouvelle image committée
-        │
-ArgoCD sync → pods preview créés
-        │
-todo-api-active  → version stable  (100% trafic)
-todo-api-preview → nouvelle version (0% trafic)
-        │
-  [validation manuelle]
-        │
-kubectl argo rollouts promote todo-api -n todo-api-staging
-        │
-Bascule instantanée — anciens pods supprimés après 30s
+```mermaid
+flowchart TD
+    A["Nouvelle image committée dans Git"] --> B["ArgoCD sync"]
+    B --> C{"Blue/Green\nargo rollouts"}
+    C --> D["todo-api-active\nversion stable — 100% trafic"]
+    C --> E["todo-api-preview\nnouvelle version — 0% trafic"]
+    E --> F["Validation manuelle\ntest de la version preview"]
+    F -->|kubectl argo rollouts promote| G["Bascule instantanée\nactive ← nouvelle version"]
+    G --> H["Anciens pods supprimés\naprès 30s"]
+    F -->|kubectl argo rollouts abort| I["Rollback\nactive reste sur l'ancienne version"]
 ```
 
 ```bash
@@ -456,6 +435,73 @@ grep -r "password:\|token:\|secret:" apps/ argocd/ infrastructure/ \
 ### RBAC K8s
 
 - `ServiceAccount` dédié par application
+- `Role` minimal : lecture seule (pods, configmaps, secrets)
+- Pas d'accès cross-namespace
+
+### Network Policies
+
+Chaque namespace a une `NetworkPolicy` bloquant tout trafic non autorisé explicitement.
+
+---
+
+## Commandes utiles
+
+### Kustomize
+
+```bash
+kustomize build apps/todo-api/overlays/dev
+kustomize build apps/todo-api/overlays/staging
+kustomize build apps/todo-api/rollouts/staging
+kustomize build infrastructure/kubernetes
+```
+
+### ArgoCD
+
+```bash
+argocd app list
+argocd app sync todo-api-dev
+argocd app sync todo-api-staging
+argocd app sync todo-api-rollout
+argocd app sync infrastructure
+argocd app get todo-api-staging
+```
+
+### Cluster
+
+```bash
+kubectl -n todo-api-dev get deploy,po,svc
+kubectl -n todo-api-staging get deploy,po,svc
+kubectl argo rollouts list rollouts -n todo-api-staging
+kubectl -n todo-api-staging get events --sort-by='.lastTimestamp'
+```
+
+### Nettoyage
+
+```bash
+argocd app delete todo-api-dev todo-api-staging todo-api-rollout infrastructure --yes
+kubectl delete ns todo-api-dev todo-api-staging
+k3d cluster delete argocd-platform
+```
+
+---
+
+## Choix techniques justifiés
+
+**Kustomize plutôt que Helm**
+Kustomize est natif Kubernetes, sans moteur de templates supplémentaire. Il surcharge uniquement ce qui change par overlay (replicas, namespace, image tag) sans dupliquer les manifests de base.
+
+**Blue/Green plutôt que Rolling Update**
+La bascule est instantanée et 100% réversible : l'ancienne version reste active jusqu'à la promotion manuelle. Zéro downtime, rollback en une commande.
+
+**ArgoCD pour le GitOps**
+UI riche, gestion déclarative des Applications via CRDs, visibilité immédiate sur l'état de sync et les diffs Git vs cluster.
+
+**Manifests K8s pour l'IaC**
+Pour les ressources Kubernetes (namespaces, RBAC, NetworkPolicy), des manifests gérés par ArgoCD suffisent et évitent la complexité d'un Terraform Controller.
+
+**Git Flow**
+Sépare le travail en cours (`feature/*`) du code stable (`main`/`develop`), avec traçabilité via les PRs et historique Git propre pour le livrable.
+plication
 - `Role` minimal : lecture seule (pods, configmaps, secrets)
 - Pas d'accès cross-namespace
 
