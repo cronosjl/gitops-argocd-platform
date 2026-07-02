@@ -1,6 +1,6 @@
 # GitOps ArgoCD Platform — Todo API
 
-Projet fil rouge GitOps : déploiement d'une API REST sur Kubernetes avec ArgoCD, Kustomize et Argo Rollouts.
+Projet fil rouge GitOps : déploiement d'une API REST sur Kubernetes avec ArgoCD et Kustomize.
 
 **Team :** `argocd-platform`
 
@@ -54,7 +54,7 @@ Toute modification de l'infrastructure passe par un commit.
 | GitOps                   | **ArgoCD** (auto-sync, prune, selfHeal)         |
 | Packaging manifests      | **Kustomize** (base + overlays)                 |
 | CI                       | **GitHub Actions**                              |
-| Déploiements progressifs | **Argo Rollouts** (blue/green ✅, canary TODO)  |
+| Déploiements progressifs | **Argo Rollouts** (blue/green TODO, canary TODO) |
 | IaC                      | Manifests K8s dans `infrastructure/kubernetes/` |
 | Secrets                  | **Sealed Secrets**                              |
 
@@ -319,9 +319,9 @@ jobs:
 
 ---
 
-## Déploiements progressifs
+### Blue/Green (TODO)
 
-### Blue/Green ✅
+Stratégie : deux versions tournent en parallèle. La bascule est manuelle et instantanée. Rollback en une commande.
 
 ```mermaid
 flowchart TD
@@ -334,25 +334,9 @@ flowchart TD
     F -->|abort| I["Rollback — ancienne version"]
 ```
 
-```bash
-# Observer
-kubectl argo rollouts get rollout todo-api -n todo-api-prod
-
-# Promouvoir
-kubectl argo rollouts promote todo-api -n todo-api-prod
-
-# Rollback
-kubectl argo rollouts abort todo-api -n todo-api-prod
-kubectl argo rollouts undo todo-api -n todo-api-prod
-
-# Dashboard
-kubectl argo rollouts dashboard -n todo-api-prod
-# → http://localhost:3100
-```
-
 ### Canary (TODO)
 
-Prochaine étape : stratégie canary 10% → 50% → 100%.
+Stratégie : montée en charge progressive — 10% → 50% → 100%, rollback automatique si métriques dégradées.
 
 ---
 
